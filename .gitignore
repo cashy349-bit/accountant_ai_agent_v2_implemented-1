@@ -1,0 +1,22 @@
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+accountant.db
+storage/*
+!storage/.gitkeep
+
+# Local backups and runtime artifacts
+*.backup_*
+*.bak
+*.before-*
+*_backup_*
+*_BACKUP_*
+alembic.backup_*/
+server.log
+
+# Local test artifacts
+tests.pytest_cache-*
+test_invoice.png
+test_invoice.txt
+test_invoice2.txt
