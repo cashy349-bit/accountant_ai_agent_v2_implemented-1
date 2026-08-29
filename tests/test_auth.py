@@ -139,3 +139,68 @@ def test_wrong_company_is_rejected(client, db):
     )
 
     assert response.status_code == 403
+
+def test_cross_company_invoice_approval_is_rejected(client, db):
+    from database.models import Company, Invoice, User
+
+    current_user = db.query(User).first()
+    other_company = Company(name="Invoice Owner Company")
+    db.add(other_company)
+    db.commit()
+    db.refresh(other_company)
+
+    invoice = Invoice(
+        company_id=other_company.id,
+        document_id="nonexistent-document",
+        vendor_name="Other Vendor",
+        invoice_number="CROSS-APPROVE-001",
+        subtotal=100,
+        tax=18,
+        total=118,
+        category="Expense",
+        confidence=0.99,
+        status="pending_approval",
+    )
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    response = client.post(
+        f"/v1/invoices/{invoice.id}/approve",
+        params={"company_id": current_user.company_id},
+    )
+
+    assert response.status_code == 404
+
+
+def test_cross_company_invoice_posting_is_rejected(client, db):
+    from database.models import Company, Invoice, User
+
+    current_user = db.query(User).first()
+    other_company = Company(name="Other Posting Company")
+    db.add(other_company)
+    db.commit()
+    db.refresh(other_company)
+
+    invoice = Invoice(
+        company_id=other_company.id,
+        document_id="nonexistent-document",
+        vendor_name="Other Vendor",
+        invoice_number="CROSS-POST-001",
+        subtotal=100,
+        tax=18,
+        total=118,
+        category="Expense",
+        confidence=0.99,
+        status="approved",
+    )
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    response = client.post(
+        f"/v1/invoices/{invoice.id}/post",
+        params={"company_id": current_user.company_id},
+    )
+
+    assert response.status_code == 404

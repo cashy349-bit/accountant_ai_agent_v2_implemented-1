@@ -230,6 +230,7 @@ def approve(
     require_role(user, "admin", "reviewer")
     inv=db.get(Invoice,invoice_id)
     if not inv: raise HTTPException(404,"Invoice not found")
+    if inv.company_id != company_id: raise HTTPException(404,"Invoice not found")
     if inv.status not in {"pending_approval"}: raise HTTPException(409,f"Invoice status is {inv.status}")
     try:
         inv.status = "approved"
@@ -256,6 +257,7 @@ def post(
     require_role(user, "admin")
     inv=db.get(Invoice,invoice_id)
     if not inv: raise HTTPException(404,"Invoice not found")
+    if inv.company_id != company_id: raise HTTPException(404,"Invoice not found")
     if inv.status!="approved": raise HTTPException(409,"Invoice must be approved before posting")
     if inv.subtotal is None or inv.tax is None or inv.total is None: raise HTTPException(400,"Incomplete amounts")
     gst_rate = (Decimal(str(inv.tax))/Decimal(str(inv.subtotal))*100) if inv.subtotal else Decimal("0")
