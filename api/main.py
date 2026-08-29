@@ -79,22 +79,59 @@ async def upload(
     suffix = Path(original_filename).suffix.lower()
     if suffix not in {".pdf",".png",".jpg",".jpeg",".txt"}:
         raise HTTPException(400,"Unsupported file type")
-    data = await file.read()
-    if not data:
-        raise HTTPException(400, "Empty file")
-
     max_mb = int(os.getenv("MAX_DOCUMENT_MB", "20"))
     max_bytes = max_mb * 1024 * 1024
-    if len(data) > max_bytes:
-        raise HTTPException(413, "File too large")
 
     doc_id = uuid4().hex
+    temp_path = storage / f".upload-{doc_id}.tmp"
     path = storage / f"{doc_id}{suffix}"
-    path.write_bytes(data)
-    fp = fingerprint(str(path))
-    duplicate = db.scalar(select(Document).where(Document.company_id==company_id, Document.fingerprint==fp))
-    doc = Document(id=doc_id, company_id=company_id, filename=original_filename, path=str(path), fingerprint=fp, status="duplicate" if duplicate else "uploaded")
-    db.add(doc); db.add(AuditLog(company_id=company_id, action="upload", entity_id=doc_id, detail=f"fingerprint={fp}")); db.commit()
+
+    total_bytes = 0
+    try:
+        with temp_path.open("wb") as output:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise HTTPException(413, "File too large")
+                output.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(400, "Empty file")
+
+        temp_path.replace(path)
+    except HTTPException:
+        temp_path.unlink(missing_ok=True)
+        raise
+    except OSError:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(500, "Unable to store document")
+    try:
+        fp = fingerprint(str(path))
+        duplicate = db.scalar(select(Document).where(Document.company_id==company_id, Document.fingerprint==fp))
+        doc = Document(
+            id=doc_id,
+            company_id=company_id,
+            filename=original_filename,
+            path=str(path),
+            fingerprint=fp,
+            status="duplicate" if duplicate else "uploaded",
+        )
+        db.add(doc)
+        db.add(AuditLog(
+            company_id=company_id,
+            action="upload",
+            entity_id=doc_id,
+            detail=f"fingerprint={fp}",
+        ))
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        path.unlink(missing_ok=True)
+        raise HTTPException(500, "Unable to persist document")
+
     text = ""
     extraction = None
     draft_result = None
