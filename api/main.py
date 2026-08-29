@@ -17,7 +17,6 @@ from accounting.engine import purchase_journal, validate_journal
 from decimal import Decimal
 import os, csv, io
 
-Base.metadata.create_all(engine)
 app = FastAPI(title="Accountant AI Agent", version="2.0.0")
 agent = AccountantAgent()
 mercury = Mercury2Client()
