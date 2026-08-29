@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from database.db import engine, db_session, Base
 from database.models import Company, Document, Invoice, Journal, JournalLineModel, AuditLog
@@ -51,6 +51,14 @@ def get_authenticated_user(
 @app.get("/health")
 def health():
     return {"status":"ok","service":"accountant-ai-agent"}
+
+@app.get("/ready")
+def ready(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ready", "service": "accountant-ai-agent"}
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 @app.post("/v1/companies")
 def create_company(name: str, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)):

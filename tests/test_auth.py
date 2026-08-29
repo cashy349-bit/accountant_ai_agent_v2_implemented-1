@@ -31,6 +31,11 @@ def test_authentication_requires_api_key(client):
     response = client.get("/health")
     assert response.status_code == 200
 
+def test_readiness_check(client):
+    response = client.get("/ready")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
 
 def test_missing_api_key_is_rejected():
     from fastapi.testclient import TestClient
