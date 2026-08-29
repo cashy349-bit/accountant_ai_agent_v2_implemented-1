@@ -27,6 +27,18 @@ class User(Base):
         unique=True,
         index=True,
     )
+    api_key_created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=now,
+    )
+    api_key_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    api_key_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
     role: Mapped[str] = mapped_column(String(40), default="reviewer")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 

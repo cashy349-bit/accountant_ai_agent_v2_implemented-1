@@ -4,7 +4,8 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
-from database.db import engine, db_session, Base
+from database.db import engine, Base
+from api.dependencies import get_db
 from database.models import Company, Document, Invoice, Journal, JournalLineModel, AuditLog
 from api.auth import get_current_user
 from api.policy import require_company_access, require_role
@@ -22,31 +23,7 @@ agent = AccountantAgent()
 mercury = Mercury2Client()
 storage = Path(os.getenv("STORAGE_DIR","storage")); storage.mkdir(exist_ok=True)
 
-def get_db():
-    yield from db_session()
-
-
-def get_authenticated_user(
-    x_api_key: str | None = Header(default=None),
-    db: Session = Depends(get_db),
-) -> User:
-    if not x_api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    from api.auth import hash_api_key
-    user = db.scalar(
-        select(User).where(
-            User.api_key_hash == hash_api_key(x_api_key)
-        )
-    )
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-    if not user.active:
-        raise HTTPException(status_code=403, detail="User is inactive")
-
-    return user
+get_authenticated_user = get_current_user
 
 @app.get("/health")
 def health():

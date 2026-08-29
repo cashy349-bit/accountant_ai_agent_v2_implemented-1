@@ -37,6 +37,65 @@ def test_readiness_check(client):
     assert response.json()["status"] == "ready"
 
 
+def test_revoked_api_key_is_rejected(client, db):
+    from database.models import User
+    from api.auth import hash_api_key
+    from datetime import datetime, timezone
+
+    user = db.query(User).filter(
+        User.api_key_hash == hash_api_key("test-api-key")
+    ).one()
+    user.api_key_revoked_at = datetime.now(timezone.utc)
+    db.commit()
+
+    response = client.post(
+        "/v1/companies",
+        params={"name": "Revoked Key Company"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "API key has been revoked"
+
+
+def test_expired_api_key_is_rejected(client, db):
+    from database.models import User
+    from api.auth import hash_api_key
+    from datetime import datetime, timezone, timedelta
+
+    user = db.query(User).filter(
+        User.api_key_hash == hash_api_key("test-api-key")
+    ).one()
+    user.api_key_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    db.commit()
+
+    response = client.post(
+        "/v1/companies",
+        params={"name": "Expired Key Company"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "API key has expired"
+
+
+def test_future_expiration_allows_authentication(client, db):
+    from database.models import User
+    from api.auth import hash_api_key
+    from datetime import datetime, timezone, timedelta
+
+    user = db.query(User).filter(
+        User.api_key_hash == hash_api_key("test-api-key")
+    ).one()
+    user.api_key_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    db.commit()
+
+    response = client.post(
+        "/v1/companies",
+        params={"name": "Valid Expiring Key Company"},
+    )
+
+    assert response.status_code == 200
+
+
 def test_missing_api_key_is_rejected():
     from fastapi.testclient import TestClient
     from api.main import app

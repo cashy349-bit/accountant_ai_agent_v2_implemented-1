@@ -1,11 +1,12 @@
 import hashlib
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from database.db import db_session
+from api.dependencies import get_db
 from database.models import User
 
 
@@ -23,6 +24,7 @@ def create_user(
     email: str,
     role: str = "reviewer",
     api_key: str | None = None,
+    api_key_expires_at: datetime | None = None,
 ) -> tuple[User, str]:
     key = api_key or generate_api_key()
 
@@ -30,6 +32,9 @@ def create_user(
         company_id=company_id,
         email=email,
         api_key_hash=hash_api_key(key),
+        api_key_created_at=datetime.now(timezone.utc),
+        api_key_expires_at=api_key_expires_at,
+        api_key_revoked_at=None,
         role=role,
         active=True,
     )
@@ -43,18 +48,12 @@ def create_user(
 
 def get_current_user(
     x_api_key: str | None = Header(default=None),
-    db: Session | None = None,
+    db: Session = Depends(get_db),
 ) -> User:
     if not x_api_key:
         raise HTTPException(
             status_code=401,
             detail="Missing API key",
-        )
-
-    if db is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Authentication database dependency not configured",
         )
 
     user = db.scalar(
@@ -68,6 +67,24 @@ def get_current_user(
             status_code=401,
             detail="Invalid API key",
         )
+
+    now = datetime.now(timezone.utc)
+
+    if user.api_key_revoked_at is not None:
+        raise HTTPException(
+            status_code=401,
+            detail="API key has been revoked",
+        )
+
+    if user.api_key_expires_at is not None:
+        expires_at = user.api_key_expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now:
+            raise HTTPException(
+                status_code=401,
+                detail="API key has expired",
+            )
 
     if not user.active:
         raise HTTPException(
