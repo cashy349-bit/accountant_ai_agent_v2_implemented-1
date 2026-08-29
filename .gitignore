@@ -20,3 +20,6 @@ tests.pytest_cache-*
 test_invoice.png
 test_invoice.txt
 test_invoice2.txt
+
+# Local database backups
+*.pre_alembic_test
